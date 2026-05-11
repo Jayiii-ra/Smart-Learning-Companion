@@ -9,6 +9,42 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Simple Local Storage for Users
+  const usersPath = path.join(process.cwd(), "users.json");
+  let users: any[] = [];
+  if (fs.existsSync(usersPath)) {
+    try {
+      users = JSON.parse(fs.readFileSync(usersPath, "utf-8"));
+    } catch (e) {
+      users = [];
+    }
+  }
+
+  const saveUsers = () => {
+    fs.writeFileSync(usersPath, JSON.stringify(users, null, 2));
+  };
+
+  // Auth Routes
+  app.post("/api/auth/signup", (req, res) => {
+    const { email, password, name } = req.body;
+    if (users.find(u => u.email === email)) {
+      return res.status(400).json({ error: "User already exists" });
+    }
+    const newUser = { id: Date.now().toString(), email, password, name };
+    users.push(newUser);
+    saveUsers();
+    res.json({ user: { id: newUser.id, email: newUser.email, name: newUser.name } });
+  });
+
+  app.post("/api/auth/login", (req, res) => {
+    const { email, password } = req.body;
+    const user = users.find(u => u.email === email && u.password === password);
+    if (!user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    res.json({ user: { id: user.id, email: user.email, name: user.name } });
+  });
+
   // RAG Logic: Simple TF-IDF like retrieval
   const knowledgeBasePath = path.join(process.cwd(), "src", "knowledge_base.txt");
   let chunks: string[] = [];

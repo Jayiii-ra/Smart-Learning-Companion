@@ -35,6 +35,26 @@ export const PROMPTS = {
     return `Create a customized learning path for "${topic}" using a ${style} learning style. ${strategy}`;
   },
 
+  VISUAL_MIND_MAP: (topic: string) => {
+    return `Generate a hierarchical mind map overview for the topic "${topic}".
+    Format the response as a JSON object with:
+    - root: string (the main topic)
+    - nodes: array of objects representing sub-topics. Each object has:
+      - title: string
+      - description: string
+      - connections: array of indices of other nodes in the array it links to (optional)
+    
+    Return ONLY the JSON.`;
+  },
+
+  AUDITORY_BREAKDOWN: (topic: string) => {
+    return `Generate a conversational script for a 1-minute audio breakdown of the topic "${topic}". 
+    It should sound like an engaging podcast or a clear voice memo explanation. 
+    Use a friendly tone and include rhythmic pauses marked as [pause] where appropriate.
+    The response should be plain text that is easy to read aloud.
+    Avoid complex markdown.`;
+  },
+
   DYNAMIC_QUIZZER: (topic: string) => {
     return `Generate a 3-question multiple choice quiz about "${topic}". 
     Format the response as a JSON array of objects, where each object has:
