@@ -1,0 +1,6 @@
+{
+  "name": "Smart Learning Companion",
+  "description": "An AI-powered EdTech platform with adaptive explanations, multi-strategy learning paths, and a local RAG grounding engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
