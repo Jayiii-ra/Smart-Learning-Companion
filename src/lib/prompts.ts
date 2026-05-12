@@ -83,5 +83,41 @@ export const PROMPTS = {
     
     USER QUERY:
     ${query}`;
+  },
+
+  KINESTHETIC_TASKS: (topic: string) => {
+    return `Generate a set of 5 hands-on, physically engaging, or active learning tasks for "${topic}".
+    These should not be just "reading" or "writing", but "doing", "building", "simulating", or "moving".
+    
+    Format the response as a JSON array of objects, where each object has:
+    - task: string (The action name)
+    - description: string (Step-by-step instructions on what to DO physically)
+    - material: string (Physical items needed, or digital tools to interact with)
+    - goal: string (What this physical action achieves in terms of learning)
+    
+    Return ONLY the JSON.`;
+  },
+
+  SUMMARIZE_LECTURE: (content: string) => {
+    return `System: You are an expert academic summarizer. 
+    Provide a concise, hierarchical summary of the following lecture content. 
+    Use clear headings and bullet points. Focus on key concepts and takeaways.
+    
+    LECTURE CONTENT:
+    ${content}`;
+  },
+
+  QUIZ_FROM_LECTURE: (content: string) => {
+    return `System: Generate a 5-question multiple choice quiz based ONLY on the following lecture content.
+    Format the response as a JSON array of objects, where each object has:
+    - question: string
+    - options: array of 4 strings
+    - correctAnswerIndex: number (0-3)
+    - explanation: string explaining why the answer is correct based on the text.
+    
+    LECTURE CONTENT:
+    ${content}
+    
+    Return ONLY the JSON.`;
   }
 };

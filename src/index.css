@@ -73,3 +73,47 @@
 .custom-scrollbar::-webkit-scrollbar-thumb {
   @apply bg-slate-200 rounded-full hover:bg-slate-300;
 }
+
+/* Markdown Support */
+.markdown-study-plan h1 {
+  @apply text-2xl font-bold mb-4 mt-6 first:mt-0;
+  color: var(--text-main);
+}
+.markdown-study-plan h2 {
+  @apply text-xl font-bold mb-3 mt-5;
+  color: var(--text-main);
+}
+.markdown-study-plan h3 {
+  @apply text-lg font-bold mb-2 mt-4;
+  color: var(--text-main);
+}
+.markdown-study-plan p {
+  @apply mb-4 leading-relaxed;
+  color: var(--text-muted);
+}
+.markdown-study-plan ul {
+  @apply list-disc pl-5 mb-4 space-y-2;
+  color: var(--text-muted);
+}
+.markdown-study-plan ol {
+  @apply list-decimal pl-5 mb-4 space-y-2;
+  color: var(--text-muted);
+}
+.markdown-study-plan li {
+  @apply pl-1;
+}
+.markdown-study-plan strong {
+  @apply font-bold;
+  color: var(--text-main);
+}
+.markdown-study-plan blockquote {
+  @apply border-l-4 pl-4 italic my-4 py-2;
+  border-color: var(--primary-color);
+  color: var(--text-muted);
+  background-color: var(--bg-main);
+}
+.markdown-study-plan code {
+  @apply border rounded px-1.5 py-0.5 font-mono text-sm;
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+}
