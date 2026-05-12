@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
@@ -127,6 +127,10 @@ export default function AIDAN() {
   const [quizHistory, setQuizHistory] = useState<QuizAttempt[]>([]);
   const [viewingAttempt, setViewingAttempt] = useState<QuizAttempt | null>(null);
 
+  useEffect(() => {
+    document.title = "Welcome, I'm AIDAN";
+  }, []);
+
   const mindMapRef = useRef<HTMLDivElement>(null);
   const studyPlanRef = useRef<HTMLDivElement>(null);
 
@@ -135,27 +139,34 @@ export default function AIDAN() {
     if (mindMapRef.current === null) return;
     setExporting(true);
     try {
-      // Ensure everything is rendered
+      // Small delay to ensure any dynamic styles or math are rendered
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      const canvas = await html2canvas(mindMapRef.current, {
+      const element = mindMapRef.current;
+      const canvas = await html2canvas(element, {
         backgroundColor: theme === 'dark' ? '#0f172a' : '#ffffff',
         scale: 2,
         useCORS: true,
         allowTaint: true,
-        logging: false
+        logging: false,
+        onclone: (clonedDoc) => {
+          const el = clonedDoc.getElementById('mind-map-capture');
+          if (el) {
+            el.style.color = theme === 'dark' ? '#f8fafc' : '#0f172a';
+          }
+        }
       });
       
       const dataUrl = canvas.toDataURL(`image/${format === 'jpeg' ? 'jpeg' : 'png'}`, 0.95);
       const link = document.createElement('a');
-      link.download = `mind-map-${topic.toLowerCase().replace(/[^a-z0-9]/g, '-')}.${format}`;
+      link.download = `mind-map-${topic.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'study'}.${format}`;
       link.href = dataUrl;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     } catch (err) {
       console.error('Export failed', err);
-      alert("Export failed. Please try again.");
+      alert("Failed to capture image. Please try again.");
     } finally {
       setExporting(false);
     }
@@ -166,30 +177,44 @@ export default function AIDAN() {
     const targetRef = type === 'mindmap' ? mindMapRef : studyPlanRef;
     if (targetRef.current === null) return;
     setExporting(true);
+    
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      const canvas = await html2canvas(targetRef.current, {
+      const element = targetRef.current;
+      const canvas = await html2canvas(element, {
         backgroundColor: theme === 'dark' ? '#0f172a' : '#ffffff',
-        scale: 2,
+        scale: 2, // High quality
         useCORS: true,
         allowTaint: true,
-        logging: false
+        height: element.scrollHeight,
+        windowHeight: element.scrollHeight,
+        onclone: (clonedDoc) => {
+            const el = clonedDoc.getElementById(type === 'mindmap' ? 'mind-map-capture' : 'study-plan-capture');
+            if (el) {
+                // Ensure text is visible and colors are correct in the clone
+                el.style.color = theme === 'dark' ? '#f8fafc' : '#0f172a';
+            }
+        }
       });
       
-      const dataUrl = canvas.toDataURL('image/png');
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = canvas.width;
+      const imgHeight = canvas.height;
       
+      // Page dimensions (standard A4 is 595 x 842 points)
+      // Here we use the image dimensions to keep it exactly as it looks
       const pdf = new jsPDF({
-        orientation: canvas.width > canvas.height ? 'l' : 'p',
+        orientation: imgWidth > imgHeight ? 'l' : 'p',
         unit: 'px',
-        format: [canvas.width, canvas.height]
+        format: [imgWidth, imgHeight]
       });
       
-      pdf.addImage(dataUrl, 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save(`${type}-${topic.toLowerCase().replace(/[^a-z0-9]/g, '-')}.pdf`);
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      pdf.save(`${type}-${topic.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'content'}.pdf`);
     } catch (err) {
       console.error('PDF export failed', err);
-      alert("PDF export failed. Please try again.");
+      alert("PDF generation failed. The content might be too large or complex.");
     } finally {
       setExporting(false);
     }
@@ -279,12 +304,13 @@ export default function AIDAN() {
     if (!lectureContent) return;
     setLoading(true);
     setActiveAction("lecture_summary");
+    setResult(null); // Clear previous result
     try {
       const prompt = PROMPTS.SUMMARIZE_LECTURE(lectureContent);
       const text = await askGemini(prompt);
       setResult(text);
     } catch (e) {
-      setResult("Error summarizing lecture.");
+      setResult("Error summarizing lecture. Please check your API key or try a smaller file.");
     } finally {
       setLoading(false);
     }
@@ -295,6 +321,7 @@ export default function AIDAN() {
     setLoading(true);
     setActiveAction("quiz");
     setQuiz([]);
+    setResult(null); // Reset result view
     setCurrentQuizIndex(0);
     setQuizFeedback(null);
     setCorrectCount(0);
@@ -312,15 +339,84 @@ export default function AIDAN() {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const extractTextFromPDF = async (arrayBuffer: ArrayBuffer): Promise<string> => {
+    try {
+      const pdfjs = await import("pdfjs-dist");
+      // Standard way to set worker in Vite projects for pdfjs-dist
+      const pdfjsLib = (pdfjs as any).default || pdfjs;
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '4.0.379'}/pdf.worker.min.js`;
+      }
+      
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      let fullText = "";
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item: any) => item.str).join(" ");
+        fullText += pageText + "\n";
+      }
+      if (!fullText.trim()) throw new Error("PDF seems to be empty or contains only images.");
+      return fullText;
+    } catch (error) {
+      console.error("PDF extraction error:", error);
+      throw error;
+    }
+  };
+
+  const extractTextFromDocx = async (arrayBuffer: ArrayBuffer): Promise<string> => {
+    try {
+      const mammoth = await import("mammoth");
+      const result = await (mammoth as any).default.extractRawText({ arrayBuffer }) || await mammoth.extractRawText({ arrayBuffer });
+      if (!result.value.trim()) throw new Error("Word document seems to be empty.");
+      return result.value;
+    } catch (error) {
+      console.error("Docx extraction error:", error);
+      throw error;
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setLectureFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setLectureContent(event.target?.result as string);
-    };
-    reader.readAsText(file);
+    setLoading(true);
+    setLectureContent(""); // Reset content
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      
+      let text = "";
+      if (extension === 'pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        text = await extractTextFromPDF(arrayBuffer);
+      } else if (extension === 'docx') {
+        const arrayBuffer = await file.arrayBuffer();
+        text = await extractTextFromDocx(arrayBuffer);
+      } else {
+        // Default to text
+        text = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => resolve(event.target?.result as string);
+          reader.onerror = (err) => reject(err);
+          reader.readAsText(file);
+        });
+      }
+      
+      if (text.trim()) {
+        setLectureContent(text);
+        // Topic could be updated to filename if needed
+        // setTopic(file.name.replace(/\.[^/.]+$/, ""));
+      } else {
+        throw new Error("No readable text found in file.");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert(error instanceof Error ? error.message : "Error processing file. Please ensure it contains readable text.");
+      setLectureFileName("");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const speakResult = () => {
@@ -1057,10 +1153,10 @@ export default function AIDAN() {
                                 </div>
                                 <div className="flex gap-4">
                                     <label className="flex-1 theme-bg-card border-2 border-dashed theme-border rounded-2xl p-6 hover:theme-primary-border transition-all cursor-pointer flex flex-col items-center justify-center text-center">
-                                        <input type="file" className="hidden" onChange={handleFileUpload} accept=".txt" />
+                                        <input type="file" className="hidden" onChange={handleFileUpload} accept=".txt,.pdf,.docx" />
                                         <Upload className="w-8 h-8 theme-text-muted mb-2" />
                                         <p className="text-[11px] font-bold theme-text-muted uppercase tracking-tight">Upload Lecture Note</p>
-                                        <p className="text-[10px] theme-text-muted opacity-60 mt-1">Accepts .txt files</p>
+                                        <p className="text-[10px] theme-text-muted opacity-60 mt-1">Accepts .txt, .pdf, .docx files</p>
                                     </label>
                                     <div className="flex flex-col gap-2 w-48">
                                         <button 
@@ -1141,7 +1237,7 @@ export default function AIDAN() {
                                         </div>
                                     </div>
                                     <div className="theme-bg-main rounded-xl border theme-border p-4 relative">
-                                        <div ref={mindMapRef} className="flex flex-col items-center p-12 space-y-32 min-h-[600px] min-w-full lg:min-w-0 theme-bg-main">
+                                        <div ref={mindMapRef} id="mind-map-capture" className="flex flex-col items-center p-12 space-y-32 min-h-[600px] min-w-full lg:min-w-0 theme-bg-main">
                                             {/* Root Node */}
                                             <motion.div 
                                                 initial={{ scale: 0 }} 
@@ -1348,7 +1444,7 @@ export default function AIDAN() {
                                         </div>
                                     </div>
 
-                                    <div ref={studyPlanRef} className="theme-bg-main rounded-xl border theme-border p-8 shadow-inner relative min-h-[400px]">
+                                    <div ref={studyPlanRef} id="study-plan-capture" className="theme-bg-main rounded-xl border theme-border p-8 shadow-inner relative min-h-[400px]">
                                         <div className="prose prose-slate max-w-none prose-sm">
                                             <div className="whitespace-pre-wrap leading-relaxed theme-text-main font-medium text-base">
                                                 <div className="markdown-study-plan prose prose-indigo">
